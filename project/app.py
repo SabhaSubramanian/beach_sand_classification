@@ -52,7 +52,7 @@ def extract_features(image_path):
     return [edge_var, contrast, correlation, energy, slope]
 
 # ------------------------
-# Dataset Preparation
+# Load Dataset from GitHub repo folder
 # ------------------------
 def load_dataset(base_dir="dataset"):
     X, y = [], []
@@ -71,32 +71,8 @@ def load_dataset(base_dir="dataset"):
             if features is not None:
                 X.append(features)
                 y.append(label)
-            else:
-                st.warning(f"Failed to extract features from: {path}")
     st.write(f"Total images loaded: {len(X)}")
     return np.array(X), np.array(y)
-
-# ------------------------
-# Train Model
-# ------------------------
-X, y = load_dataset("dataset")
-if len(X) == 0:
-    st.error("Dataset is empty! Add images in dataset/fine, dataset/medium, dataset/coarse.")
-    st.stop()
-
-# Scale features
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
-
-# Train SVM
-X_train, X_test, y_train, y_test = train_test_split(
-    X_scaled, y, test_size=0.2, random_state=42, stratify=y
-)
-clf = SVC(kernel='rbf', C=10, gamma=0.1)
-clf.fit(X_train, y_train)
-
-# Class labels
-classes = ["Fine", "Medium", "Coarse"]
 
 # ------------------------
 # Streamlit App
@@ -114,18 +90,31 @@ if "last_prediction" not in st.session_state:
     st.session_state.last_prediction = None
 
 # ------------------------
-# Prediction Button
+# Load dataset and train model
+# ------------------------
+X, y = load_dataset("dataset")
+if len(X) == 0:
+    st.error("Dataset is empty! Add images in dataset/fine, dataset/medium, dataset/coarse.")
+    st.stop()
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42, stratify=y)
+clf = SVC(kernel='rbf', C=10, gamma=0.1)
+clf.fit(X_train, y_train)
+classes = ["Fine", "Medium", "Coarse"]
+
+# ------------------------
+# Prediction
 # ------------------------
 if st.button("Predict Sand Classification"):
     if uploaded_file is None or not lat or not lon:
         st.warning("Please upload an image and enter latitude & longitude first.")
     else:
-        # Save temporary image
         temp_path = "temp_image.jpg"
         with open(temp_path, "wb") as f:
             f.write(uploaded_file.read())
 
-        # Extract features
         features = extract_features(temp_path)
         if features:
             features_scaled = scaler.transform([features])
@@ -140,10 +129,10 @@ if st.button("Predict Sand Classification"):
             else:
                 inference = "Approx. Size: 0.5 – 1 mm\nBest for ports/harbors/lighthouses.\nNot suitable for farming or tourist resorts."
 
-            # Save in session state
+            # Save last prediction
             st.session_state.last_prediction = (result, inference, temp_path)
 
-            # Add marker
+            # Add map marker
             try:
                 lat_f, lon_f = float(lat), float(lon)
                 st.session_state.markers.append((lat_f, lon_f, result))
@@ -158,12 +147,12 @@ if st.button("Predict Sand Classification"):
 if st.session_state.last_prediction:
     result, inference, img_path = st.session_state.last_prediction
     st.success(f"Sand Grain Classification: {result}")
-    for line in inference.split('\n'):
+    for line in inference.split("\n"):
         st.write(line)
     st.image(img_path, caption=f"Uploaded Image - {result} Sand", use_container_width=True)
 
 # ------------------------
-# Display map with all markers
+# Display map with markers and legend
 # ------------------------
 if st.session_state.markers:
     last_marker = st.session_state.markers[-1]
@@ -176,6 +165,7 @@ if st.session_state.markers:
             icon=folium.Icon(color="blue" if mk[2]=="Fine" else "orange" if mk[2]=="Medium" else "green")
         ).add_to(m)
     st_folium(m, width=700, height=500)
+
     st.markdown("""
     <div style='padding:10px; border:1px solid grey; width:200px;'>
     <b>Sand Type Legend</b><br>
