@@ -55,49 +55,45 @@ def extract_features(image_path):
 # ------------------------
 # Dataset Preparation
 # ------------------------
-def load_dataset(base_dir=None):
-    # Base directory relative to this script
-    if base_dir is None:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        base_dir = os.path.join(script_dir, "..", "dataset")  # dataset at repo root
-
+def load_dataset(base_dir="dataset"):
     X, y = [], []
     labels = {"fine": 0, "medium": 1, "coarse": 2}
-
     for cls, label in labels.items():
         folder = os.path.join(base_dir, cls)
         if not os.path.exists(folder):
-            print(f"⚠️ Folder not found: {folder}")
             continue
         for fname in os.listdir(folder):
             path = os.path.join(folder, fname)
-            if not os.path.isfile(path):  # skip non-files
-                continue
             features = extract_features(path)
             if features is not None:
                 X.append(features)
                 y.append(label)
-
     return np.array(X), np.array(y)
-
-
+    
 # ------------------------
 # Train Model
 # ------------------------
-X, y = load_dataset("dataset")
-if len(X) == 0:
-    st.error("Dataset is empty! Add images in dataset/fine, dataset/medium, dataset/coarse.")
-    st.stop()
-
-scaler = StandardScaler()
-X = scaler.fit_transform(X)
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
-
-clf = SVC(kernel='rbf', C=10, gamma=0.1)
-clf.fit(X_train, y_train)
-classes = ["Fine", "Medium", "Coarse"]
+def load_dataset(base_dir="dataset"):
+    X, y = [], []
+    labels = {"fine": 0, "medium": 1, "coarse": 2}
+    for cls, label in labels.items():
+        folder = os.path.join(base_dir, cls)
+        if not os.path.exists(folder):
+            st.warning(f"Folder not found: {folder}")
+            continue
+        files = [f for f in os.listdir(folder) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+        if len(files) == 0:
+            st.warning(f"No images found in: {folder}")
+        for fname in files:
+            path = os.path.join(folder, fname)
+            features = extract_features(path)
+            if features is not None:
+                X.append(features)
+                y.append(label)
+            else:
+                st.warning(f"Failed to extract features from: {path}")
+    st.write(f"Total images loaded: {len(X)}")
+    return np.array(X), np.array(y)
 
 # ------------------------
 # Streamlit App
@@ -195,4 +191,5 @@ if st.session_state.markers:
     <span style='color:green;'>●</span> Coarse
     </div>
     """, unsafe_allow_html=True)
+
 
