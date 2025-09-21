@@ -90,7 +90,7 @@ def load_dataset(base_dir=None):
     if not found:
         st.warning("Dataset folder not found. Make sure 'dataset/' exists.")
 
-    st.write(f"Total images loaded: {len(X)}")
+    #st.write(f"Total images loaded: {len(X)}")
     return np.array(X), np.array(y)
 
 # ------------------------
@@ -194,3 +194,4 @@ if st.session_state.markers:
     <span style='color:green;'>●</span> Coarse
     </div>
     """, unsafe_allow_html=True)
+
