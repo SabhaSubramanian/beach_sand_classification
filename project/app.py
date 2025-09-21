@@ -7,7 +7,6 @@ from streamlit_folium import st_folium
 from sklearn.svm import SVC
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import classification_report
 
 # --- Compatibility for scikit-image versions ---
 try:
@@ -61,24 +60,6 @@ def load_dataset(base_dir="dataset"):
     for cls, label in labels.items():
         folder = os.path.join(base_dir, cls)
         if not os.path.exists(folder):
-            continue
-        for fname in os.listdir(folder):
-            path = os.path.join(folder, fname)
-            features = extract_features(path)
-            if features is not None:
-                X.append(features)
-                y.append(label)
-    return np.array(X), np.array(y)
-    
-# ------------------------
-# Train Model
-# ------------------------
-def load_dataset(base_dir="dataset"):
-    X, y = [], []
-    labels = {"fine": 0, "medium": 1, "coarse": 2}
-    for cls, label in labels.items():
-        folder = os.path.join(base_dir, cls)
-        if not os.path.exists(folder):
             st.warning(f"Folder not found: {folder}")
             continue
         files = [f for f in os.listdir(folder) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
@@ -96,6 +77,28 @@ def load_dataset(base_dir="dataset"):
     return np.array(X), np.array(y)
 
 # ------------------------
+# Train Model
+# ------------------------
+X, y = load_dataset("dataset")
+if len(X) == 0:
+    st.error("Dataset is empty! Add images in dataset/fine, dataset/medium, dataset/coarse.")
+    st.stop()
+
+# Scale features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Train SVM
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y, test_size=0.2, random_state=42, stratify=y
+)
+clf = SVC(kernel='rbf', C=10, gamma=0.1)
+clf.fit(X_train, y_train)
+
+# Class labels
+classes = ["Fine", "Medium", "Coarse"]
+
+# ------------------------
 # Streamlit App
 # ------------------------
 st.title("Innovexa's Beach Sand Classification App")
@@ -104,7 +107,7 @@ uploaded_file = st.file_uploader("Upload a beach sand image", type=["jpg", "png"
 lat = st.text_input("Enter Latitude:")
 lon = st.text_input("Enter Longitude:")
 
-# Initialize session state for markers and last prediction
+# Initialize session state
 if "markers" not in st.session_state:
     st.session_state.markers = []
 if "last_prediction" not in st.session_state:
@@ -122,22 +125,22 @@ if st.button("Predict Sand Classification"):
         with open(temp_path, "wb") as f:
             f.write(uploaded_file.read())
 
-        # Extract features and predict
+        # Extract features
         features = extract_features(temp_path)
         if features:
-            features = scaler.transform([features])
-            pred = clf.predict(features)[0]
+            features_scaled = scaler.transform([features])
+            pred = clf.predict(features_scaled)[0]
             result = classes[pred]
 
-            # Prepare inference text
+            # Inference text
             if result == "Fine":
                 inference = "Approx. Size: 0.125 – 0.25 mm\nBest for tourism/recreation.\nNot suitable for heavy ports."
             elif result == "Medium":
                 inference = "Approx. Size: 0.25 – 0.5 mm\nSuitable for fishing harbors, small breakwaters.\nNot suitable for skyscrapers or nuclear plants."
-            else:  # Coarse
+            else:
                 inference = "Approx. Size: 0.5 – 1 mm\nBest for ports/harbors/lighthouses.\nNot suitable for farming or tourist resorts."
 
-            # Store last prediction in session_state
+            # Save in session state
             st.session_state.last_prediction = (result, inference, temp_path)
 
             # Add marker
@@ -154,15 +157,9 @@ if st.button("Predict Sand Classification"):
 # ------------------------
 if st.session_state.last_prediction:
     result, inference, img_path = st.session_state.last_prediction
-
-    # 1. Display result
     st.success(f"Sand Grain Classification: {result}")
-
-    # 2. Display inference line by line
     for line in inference.split('\n'):
         st.write(line)
-
-    # 3. Display uploaded image
     st.image(img_path, caption=f"Uploaded Image - {result} Sand", use_container_width=True)
 
 # ------------------------
@@ -179,10 +176,6 @@ if st.session_state.markers:
             icon=folium.Icon(color="blue" if mk[2]=="Fine" else "orange" if mk[2]=="Medium" else "green")
         ).add_to(m)
     st_folium(m, width=700, height=500)
-
-    # ------------------------
-    # Add legend/key below map
-    # ------------------------
     st.markdown("""
     <div style='padding:10px; border:1px solid grey; width:200px;'>
     <b>Sand Type Legend</b><br>
