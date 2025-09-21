@@ -54,40 +54,57 @@ def extract_features(image_path):
 # ------------------------
 # Dataset Preparation
 # ------------------------
-def load_dataset(base_dir="dataset"):
+def load_dataset(base_dir=None):
+    # Try multiple paths if not provided
+    possible_paths = []
+    if base_dir:
+        possible_paths.append(base_dir)
+    possible_paths.append(os.path.join(os.getcwd(), "dataset"))
+    possible_paths.append(os.path.join(os.path.dirname(__file__), "dataset"))
+
     X, y = [], []
     labels = {"fine": 0, "medium": 1, "coarse": 2}
-    for cls, label in labels.items():
-        folder = os.path.join(base_dir, cls)
-        if not os.path.exists(folder):
-            st.warning(f"Folder not found: {folder}")
-            continue
-        files = [f for f in os.listdir(folder) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-        if len(files) == 0:
-            st.warning(f"No images found in: {folder}")
-        for fname in files:
-            path = os.path.join(folder, fname)
-            features = extract_features(path)
-            if features is not None:
-                X.append(features)
-                y.append(label)
-            else:
-                st.warning(f"Failed to extract features from: {path}")
+
+    found = False
+    for path in possible_paths:
+        if os.path.exists(path):
+            found = True
+            for cls, label in labels.items():
+                folder = os.path.join(path, cls)
+                if not os.path.exists(folder):
+                    st.warning(f"Folder not found: {folder}")
+                    continue
+                files = [f for f in os.listdir(folder) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+                if len(files) == 0:
+                    st.warning(f"No images found in: {folder}")
+                for fname in files:
+                    fpath = os.path.join(folder, fname)
+                    features = extract_features(fpath)
+                    if features is not None:
+                        X.append(features)
+                        y.append(label)
+                    else:
+                        st.warning(f"Failed to extract features from: {fpath}")
+            break
+
+    if not found:
+        st.warning("Dataset folder not found. Make sure 'dataset/' exists.")
+
     st.write(f"Total images loaded: {len(X)}")
     return np.array(X), np.array(y)
 
 # ------------------------
-# Train Model
+# Load dataset and train model
 # ------------------------
-X, y = load_dataset("dataset")
+X, y = load_dataset()
 if len(X) == 0:
     st.error("Dataset is empty! Add images in dataset/fine, dataset/medium, dataset/coarse.")
     st.stop()
 
 scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+X = scaler.fit_transform(X)
 X_train, X_test, y_train, y_test = train_test_split(
-    X_scaled, y, test_size=0.2, random_state=42, stratify=y
+    X, y, test_size=0.2, random_state=42, stratify=y
 )
 
 clf = SVC(kernel='rbf', C=10, gamma=0.1)
@@ -103,7 +120,7 @@ uploaded_file = st.file_uploader("Upload a beach sand image", type=["jpg", "png"
 lat = st.text_input("Enter Latitude:")
 lon = st.text_input("Enter Longitude:")
 
-# Session state
+# Initialize session state
 if "markers" not in st.session_state:
     st.session_state.markers = []
 if "last_prediction" not in st.session_state:
@@ -131,7 +148,7 @@ if st.button("Predict Sand Classification"):
                 inference = "Approx. Size: 0.125 – 0.25 mm\nBest for tourism/recreation.\nNot suitable for heavy ports."
             elif result == "Medium":
                 inference = "Approx. Size: 0.25 – 0.5 mm\nSuitable for fishing harbors, small breakwaters.\nNot suitable for skyscrapers or nuclear plants."
-            else:  # Coarse
+            else:
                 inference = "Approx. Size: 0.5 – 1 mm\nBest for ports/harbors/lighthouses.\nNot suitable for farming or tourist resorts."
 
             st.session_state.last_prediction = (result, inference, temp_path)
@@ -155,7 +172,7 @@ if st.session_state.last_prediction:
     st.image(img_path, caption=f"Uploaded Image - {result} Sand", use_container_width=True)
 
 # ------------------------
-# Display map
+# Display map with markers
 # ------------------------
 if st.session_state.markers:
     last_marker = st.session_state.markers[-1]
