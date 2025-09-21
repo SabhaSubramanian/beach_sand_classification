@@ -55,20 +55,31 @@ def extract_features(image_path):
 # ------------------------
 # Dataset Preparation
 # ------------------------
-def load_dataset(base_dir="dataset"):
+def load_dataset(base_dir=None):
+    # Base directory relative to this script
+    if base_dir is None:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        base_dir = os.path.join(script_dir, "..", "dataset")  # dataset at repo root
+
     X, y = [], []
     labels = {"fine": 0, "medium": 1, "coarse": 2}
+
     for cls, label in labels.items():
         folder = os.path.join(base_dir, cls)
         if not os.path.exists(folder):
+            print(f"⚠️ Folder not found: {folder}")
             continue
         for fname in os.listdir(folder):
             path = os.path.join(folder, fname)
+            if not os.path.isfile(path):  # skip non-files
+                continue
             features = extract_features(path)
             if features is not None:
                 X.append(features)
                 y.append(label)
+
     return np.array(X), np.array(y)
+
 
 # ------------------------
 # Train Model
@@ -184,3 +195,4 @@ if st.session_state.markers:
     <span style='color:green;'>●</span> Coarse
     </div>
     """, unsafe_allow_html=True)
+
