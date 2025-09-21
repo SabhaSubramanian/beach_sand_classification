@@ -52,7 +52,7 @@ def extract_features(image_path):
     return [edge_var, contrast, correlation, energy, slope]
 
 # ------------------------
-# Load Dataset from GitHub repo folder
+# Dataset Preparation
 # ------------------------
 def load_dataset(base_dir="dataset"):
     X, y = [], []
@@ -71,8 +71,28 @@ def load_dataset(base_dir="dataset"):
             if features is not None:
                 X.append(features)
                 y.append(label)
+            else:
+                st.warning(f"Failed to extract features from: {path}")
     st.write(f"Total images loaded: {len(X)}")
     return np.array(X), np.array(y)
+
+# ------------------------
+# Train Model
+# ------------------------
+X, y = load_dataset("dataset")
+if len(X) == 0:
+    st.error("Dataset is empty! Add images in dataset/fine, dataset/medium, dataset/coarse.")
+    st.stop()
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y, test_size=0.2, random_state=42, stratify=y
+)
+
+clf = SVC(kernel='rbf', C=10, gamma=0.1)
+clf.fit(X_train, y_train)
+classes = ["Fine", "Medium", "Coarse"]
 
 # ------------------------
 # Streamlit App
@@ -83,29 +103,14 @@ uploaded_file = st.file_uploader("Upload a beach sand image", type=["jpg", "png"
 lat = st.text_input("Enter Latitude:")
 lon = st.text_input("Enter Longitude:")
 
-# Initialize session state
+# Session state
 if "markers" not in st.session_state:
     st.session_state.markers = []
 if "last_prediction" not in st.session_state:
     st.session_state.last_prediction = None
 
 # ------------------------
-# Load dataset and train model
-# ------------------------
-X, y = load_dataset("dataset")
-if len(X) == 0:
-    st.error("Dataset is empty! Add images in dataset/fine, dataset/medium, dataset/coarse.")
-    st.stop()
-
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
-X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42, stratify=y)
-clf = SVC(kernel='rbf', C=10, gamma=0.1)
-clf.fit(X_train, y_train)
-classes = ["Fine", "Medium", "Coarse"]
-
-# ------------------------
-# Prediction
+# Prediction Button
 # ------------------------
 if st.button("Predict Sand Classification"):
     if uploaded_file is None or not lat or not lon:
@@ -126,13 +131,11 @@ if st.button("Predict Sand Classification"):
                 inference = "Approx. Size: 0.125 – 0.25 mm\nBest for tourism/recreation.\nNot suitable for heavy ports."
             elif result == "Medium":
                 inference = "Approx. Size: 0.25 – 0.5 mm\nSuitable for fishing harbors, small breakwaters.\nNot suitable for skyscrapers or nuclear plants."
-            else:
+            else:  # Coarse
                 inference = "Approx. Size: 0.5 – 1 mm\nBest for ports/harbors/lighthouses.\nNot suitable for farming or tourist resorts."
 
-            # Save last prediction
             st.session_state.last_prediction = (result, inference, temp_path)
 
-            # Add map marker
             try:
                 lat_f, lon_f = float(lat), float(lon)
                 st.session_state.markers.append((lat_f, lon_f, result))
@@ -147,12 +150,12 @@ if st.button("Predict Sand Classification"):
 if st.session_state.last_prediction:
     result, inference, img_path = st.session_state.last_prediction
     st.success(f"Sand Grain Classification: {result}")
-    for line in inference.split("\n"):
+    for line in inference.split('\n'):
         st.write(line)
     st.image(img_path, caption=f"Uploaded Image - {result} Sand", use_container_width=True)
 
 # ------------------------
-# Display map with markers and legend
+# Display map
 # ------------------------
 if st.session_state.markers:
     last_marker = st.session_state.markers[-1]
